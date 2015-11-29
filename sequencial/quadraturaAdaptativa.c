@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "../timer.h"
 
 long double umMaisX(long double x)
 {
@@ -11,7 +12,7 @@ long double umMaisX(long double x)
     return retorno;
 }
 
-long double raizDeUmMaisXElevadoAoQuadrado(long double x)
+long double raizDeUmMaisXAoQuadrado(long double x)
 {
     long double retorno;
 
@@ -29,6 +30,48 @@ long double raizDeUmMaisXElevadoAQuartaPotencia(long double x)
     return retorno;
 }
 
+long double senoXAoQuadrado(long double x)
+{
+    long double retorno;
+
+    retorno = sin(x*x);
+    
+    return retorno;
+}
+
+long double cincoMilesimosVezesXAoCuboMaisUm_VezesCossenoDeExpMenosX(long double x)
+{
+    long double retorno;
+
+    retorno = (0.005L * x*x*x + 1.0L)*cos(exp(-x));
+    
+    return retorno;
+}
+
+void ajuda(char *prog)
+{
+    puts("Tente usar: ");
+    printf("\t%s <inicioIntervalo> <fimIntervalo> <erro> <codFunc>\n\n", prog);
+    puts("Para descobrir os codigos de funcao execute:");
+    printf("\t%s [-l]\n", prog);
+}
+
+void listarFuncoes()
+{
+    puts("Valores válidos para funcao:");
+    puts("-- f(x) = 1 + x \t\t\t-> 1");
+    puts("-- f(x) = sqrt(1 + x^2) \t\t-> 2");
+    puts("-- f(x) = sqrt(1 + x^4) \t\t-> 3");
+    puts("-- f(x) = sen(x^2) \t\t\t-> 4");
+    puts("-- f(x) = cos(e^(-x)) * 0.005 * x^3 + 1\t-> 5");
+}
+
+long double absoluto(long double valor)
+{
+    if (valor < 0.0L) return -valor;
+    return valor;
+}
+
 long double calculaIntervalo(long double inicio, long double fim, long double erro, long double (*func)(long double) )
 {
     long double pontoMedio_InicioFim, pontoMedio_InicioMeio, pontoMedio_MeioFim;
@@ -44,8 +87,11 @@ long double calculaIntervalo(long double inicio, long double fim, long double er
     fimAtual = fim;
     somaPartesInicioAteFim = 0.0L;
     
+    int i=0;
     while(inicioAtual != fim)
     {   
+        i++;
+        
         pontoMedio_InicioFim    = (fimAtual + inicioAtual) / 2.0L;
         pontoMedio_InicioMeio   = (inicioAtual + pontoMedio_InicioFim) / 2.0L;
         pontoMedio_MeioFim      = (pontoMedio_InicioFim + fimAtual) / 2.0L;
@@ -62,9 +108,7 @@ long double calculaIntervalo(long double inicio, long double fim, long double er
         areaAprox_InicioMeio    = intervalo_InicioMeio * valorFunc_PontoMedio_InicioMeio;
         areaAprox_MeioFim       = intervalo_MeioFim * valorFunc_PontoMedio_MeioFim;
 
-        erroAtual = (areaAprox_InicioFim - (areaAprox_InicioMeio + areaAprox_MeioFim));
-        
-        if (erroAtual < 0.0L) erroAtual = -erroAtual;
+        erroAtual = absoluto(areaAprox_InicioFim - (areaAprox_InicioMeio + areaAprox_MeioFim));
         
         if (erroAtual <= erro) 
         {
@@ -85,6 +129,8 @@ long double calculaIntervalo(long double inicio, long double fim, long double er
         }
     }
     
+    printf("Número de iterações: %d\n", i);
+    
     return somaPartesInicioAteFim;
 }
 
@@ -92,20 +138,38 @@ int main (int argc, char *argv[])
 {
     long double integral_A_B;
     long double inicio, fim, erro;
+    double tempo_inicio, tempo_fim;
     
     int funcao = 0;
     
+    if (argc == 2 && argv[1][0] == '-' && argv[1][1] == 'h')
+    {
+        ajuda(argv[0]);
+        return 0;
+    }
+    
+    if (argc == 2 && argv[1][0] == '-' && argv[1][1] == 'l')
+    {
+        listarFuncoes();
+        return 0;
+    }
+    
     if (argc < 5) 
     {
-        puts("Número de argumentos incompatível tente: prog valorInicioIntervalo valorFimIntervalo valorErro codFunc.\nExemplo: para um intervalo de 0 a 1, um erro de 0.0001 e a funcao f = 1 + x:\n-> execute: prog 1 2 0.0001 1");
+        puts("Número de argumentos incompatível para ajuda tente:");
+        printf("%s [-h]\n", argv[0]);
+        
         return -1;
     }
+    
     
     inicio = strtold(argv[1], NULL);
     fim = strtold(argv[2], NULL);
     erro = strtold(argv[3], NULL);
     
     funcao = atoi(argv[4]);
+
+    GET_TIME(tempo_inicio);
     
     switch(funcao) 
     {
@@ -113,17 +177,26 @@ int main (int argc, char *argv[])
             integral_A_B = calculaIntervalo(inicio, fim, erro, &umMaisX);
             break;
         case 2:
-            integral_A_B = calculaIntervalo(inicio, fim, erro, &raizDeUmMaisXElevadoAoQuadrado);
+            integral_A_B = calculaIntervalo(inicio, fim, erro, &raizDeUmMaisXAoQuadrado);
             break;
         case 3:
             integral_A_B = calculaIntervalo(inicio, fim, erro, &raizDeUmMaisXElevadoAQuartaPotencia);
             break;
+        case 4:
+            integral_A_B = calculaIntervalo(inicio, fim, erro, &senoXAoQuadrado);
+            break;
+        case 5:
+            integral_A_B = calculaIntervalo(inicio, fim, erro, &cincoMilesimosVezesXAoCuboMaisUm_VezesCossenoDeExpMenosX);
+            break;
         default: 
-            puts("Valores válidos para funcao:\n-- f(x) = 1 + x \t\t-> 1\n-- f(x) = sqrt(1 + x^2) \t-> 2\n-- f(x) = sqrt(1 + x^4) \t-> 3");
+            listarFuncoes();
             return -1;
     }
     
+    GET_TIME(tempo_fim);
+    
     printf("Valor da integral: %.20Lf\n", integral_A_B);
+    printf("Tempo de calculo: %.20lf\n", tempo_fim - tempo_inicio);
     
     return 0;
 }
