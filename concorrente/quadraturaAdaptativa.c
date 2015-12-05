@@ -3,10 +3,12 @@
 #include <math.h>
 #include "../libs/timer.h"
 
+int numThreads;
+
 void ajuda(char *prog)
 {
     puts("Tente usar: ");
-    printf("\t%s <inicioIntervalo> <fimIntervalo> <erro> <codFunc>\n\n", prog);
+    printf("\t%s <inicioIntervalo> <fimIntervalo> <erro> <codFunc> <numThreads>\n\n", prog);
     puts("Para descobrir os codigos de funcao execute:");
     printf("\t%s [-l]\n", prog);
 }
@@ -119,7 +121,7 @@ int main (int argc, char *argv[])
         return 0;
     }
     
-    if (argc < 5) 
+    if (argc < 6) 
     {
         puts("Número de argumentos incompatível para ajuda tente:");
         printf("%s [-h]\n", argv[0]);
@@ -133,6 +135,7 @@ int main (int argc, char *argv[])
     erro = strtold(argv[3], NULL);
     
     funcao = atoi(argv[4]);
+    numThreads = atoi(argv[5]);
 
     GET_TIME(tempo_inicio);
     
