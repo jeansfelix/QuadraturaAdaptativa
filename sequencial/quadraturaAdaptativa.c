@@ -122,11 +122,10 @@ int main (int argc, char *argv[])
     if (argc < 5) 
     {
         puts("Número de argumentos incompatível para ajuda tente:");
-        printf("%s [-h]\n", argv[0]);
+        printf("\t%s [-h]\n", argv[0]);
         
         return -1;
     }
-    
     
     inicio = strtold(argv[1], NULL);
     fim = strtold(argv[2], NULL);
