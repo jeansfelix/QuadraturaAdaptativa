@@ -7,18 +7,22 @@
 typedef struct _ARG_Thread{
     int tid;
     long double erro;
-    long double inicio;
-    long double fim;
 }ARG_Thread;
 
 typedef struct _intervalo{
     long double inicio, fim;
 }INTERVALO;
 
-int numThreads, numThreadsOciosas;
+INTERVALO *intervalos;
+
+int numThreads, numThreadsOciosas, numIntervalos;
+int start;
 
 long double (*funcao)(long double);
 long double *somas_parciais;
+
+pthread_mutex_t mutex;
+pthread_cond_t cond_pegaIntervalo;
 
 //Retorna o valor absoluto do valor passado.
 long double absoluto(long double valor);
@@ -34,6 +38,30 @@ long double raizDeUmMaisXElevadoAQuartaPotencia(long double x);
 long double senoXAoQuadrado(long double x);
 long double cincoMilesimosVezesXAoCuboMaisUm_VezesCossenoDeExpMenosX(long double x);
 
+int produzIntervalo(long double inicio, long double fim) 
+{
+	INTERVALO novo = {inicio,fim};
+
+	if (numIntervalos < numThreads) 
+	{
+		intervalos[numIntervalos] = novo;
+		numIntervalos++;
+		return 1;
+	}
+	else 
+	{
+		return 0;
+	}
+}
+
+INTERVALO pegaIntervalo()
+{
+	printf("%d  ", numIntervalos);
+	numIntervalos--;
+	printf("%.20Lf , %.20Lf\n", intervalos[numIntervalos].inicio, intervalos[numIntervalos].fim);
+	return intervalos[numIntervalos];
+}
+
 void *calculaIntervalo(void *arg)
 {
     ARG_Thread argThread = *(ARG_Thread*) arg;
@@ -47,64 +75,91 @@ void *calculaIntervalo(void *arg)
     long double inicioAtual, fimAtual;
     long double somaPartesInicioAteFim;
     
-    long int i;
+    long int iteracoes = 0;
     
     INTERVALO intervalo;
-    
-    intervalo.inicio = argThread.inicio;
-    intervalo.fim = argThread.fim;
 
-    inicioAtual = intervalo.inicio;
-    fimAtual = intervalo.fim;
-    somaPartesInicioAteFim = 0.0L;
+	while (1) 
+	{
+		pthread_mutex_lock(&mutex);
+		numThreadsOciosas++;
+	
+		while (numIntervalos == 0)
+		{
+			if (numThreadsOciosas == numThreads && start == 0) 
+			{
+				printf("intervalos %d,  t%d = %ld\n", numIntervalos, argThread.tid, iteracoes);
+				pthread_cond_broadcast(&cond_pegaIntervalo);
+				pthread_mutex_unlock(&mutex);
+				pthread_exit(NULL);
+			}
+			pthread_cond_wait(&cond_pegaIntervalo, &mutex);
+		}
 
+		start = 0;
+		intervalo = pegaIntervalo();
 
-    pthread_mutex_lock(&mutex);
-    numThreadsOciosas--;
-    pthread_mutex_unlock(&mutex);
+		inicioAtual = intervalo.inicio;
+    	fimAtual = intervalo.fim;
+		somaPartesInicioAteFim = 0.0L;
+		
+		numThreadsOciosas--;
+		pthread_mutex_unlock(&mutex);
 
-    while(inicioAtual != intervalo.fim)
-    {   
-        i++;
-        
-        pontoMedio_InicioFim    = (fimAtual + inicioAtual) / 2.0L;
-        pontoMedio_InicioMeio   = (inicioAtual + pontoMedio_InicioFim) / 2.0L;
-        pontoMedio_MeioFim      = (pontoMedio_InicioFim + fimAtual) / 2.0L;
+		while(inicioAtual != intervalo.fim)
+		{   
+		    iteracoes++;
+		    
+		    pontoMedio_InicioFim    = (fimAtual + inicioAtual) / 2.0L;
+		    pontoMedio_InicioMeio   = (inicioAtual + pontoMedio_InicioFim) / 2.0L;
+		    pontoMedio_MeioFim      = (pontoMedio_InicioFim + fimAtual) / 2.0L;
 
-        intervalo_InicioFim     = fimAtual - inicioAtual;
-        intervalo_InicioMeio    = pontoMedio_InicioFim - inicioAtual;
-        intervalo_MeioFim       = fimAtual - pontoMedio_InicioFim;
+		    intervalo_InicioFim     = fimAtual - inicioAtual;
+		    intervalo_InicioMeio    = pontoMedio_InicioFim - inicioAtual;
+		    intervalo_MeioFim       = fimAtual - pontoMedio_InicioFim;
 
-        valorFunc_PontoMedio_InicioFim  = (funcao)(pontoMedio_InicioFim);
-        valorFunc_PontoMedio_InicioMeio = (funcao)(pontoMedio_InicioMeio);
-        valorFunc_PontoMedio_MeioFim    = (funcao)(pontoMedio_MeioFim);
+		    valorFunc_PontoMedio_InicioFim  = (funcao)(pontoMedio_InicioFim);
+		    valorFunc_PontoMedio_InicioMeio = (funcao)(pontoMedio_InicioMeio);
+		    valorFunc_PontoMedio_MeioFim    = (funcao)(pontoMedio_MeioFim);
 
-        areaAprox_InicioFim     = intervalo_InicioFim * valorFunc_PontoMedio_InicioFim;
-        areaAprox_InicioMeio    = intervalo_InicioMeio * valorFunc_PontoMedio_InicioMeio;
-        areaAprox_MeioFim       = intervalo_MeioFim * valorFunc_PontoMedio_MeioFim;
+		    areaAprox_InicioFim     = intervalo_InicioFim * valorFunc_PontoMedio_InicioFim;
+		    areaAprox_InicioMeio    = intervalo_InicioMeio * valorFunc_PontoMedio_InicioMeio;
+		    areaAprox_MeioFim       = intervalo_MeioFim * valorFunc_PontoMedio_MeioFim;
 
-        erroAtual = absoluto(areaAprox_InicioFim - (areaAprox_InicioMeio + areaAprox_MeioFim));
-        
-        if (erroAtual <= argThread.erro)
-        {
-            //Soma a area da parte atual e avança para a próxima parte não calculada.
-            somaPartesInicioAteFim  += areaAprox_InicioFim;
-            
-            inicioAtual = fimAtual;
-            fimAtual = intervalo.inicio + (2.0L * (inicioAtual - intervalo.inicio));
-            
-            if ( fimAtual >= intervalo.fim ) 
-            {
-                fimAtual = intervalo.fim;
-            }
-        }
-        else 
-        {
-            fimAtual = pontoMedio_InicioFim;
-        }
-    }
-    
-    somas_parciais[argThread.tid] += somaPartesInicioAteFim;
+		    erroAtual = absoluto(areaAprox_InicioFim - (areaAprox_InicioMeio + areaAprox_MeioFim));
+		    
+		    if (erroAtual <= argThread.erro)
+		    {
+		        //Soma a area da parte atual e avança para a próxima parte não calculada.
+		        somaPartesInicioAteFim  += areaAprox_InicioFim;
+		        
+		        inicioAtual = fimAtual;
+		        fimAtual = intervalo.inicio + (2.0L * (inicioAtual - intervalo.inicio));
+		        
+		        if ( fimAtual >= intervalo.fim ) 
+		        {
+		            fimAtual = intervalo.fim;
+		        }
+		    }
+		    else 
+		    {
+		        fimAtual = pontoMedio_InicioFim;
+				
+				pthread_mutex_lock(&mutex);
+				if (numThreadsOciosas > 0) 
+				{
+					if (produzIntervalo(fimAtual, intervalo.fim))
+					{
+						pthread_cond_signal(&cond_pegaIntervalo);
+						intervalo.fim = fimAtual;
+					}
+				}
+				pthread_mutex_unlock(&mutex);
+		    }
+		}
+		
+		somas_parciais[argThread.tid] += somaPartesInicioAteFim;
+	}
     
     pthread_exit(NULL);
 }
@@ -117,25 +172,31 @@ long double calculaIntegral(long double inicio, long double fim, long double err
     pthread_t tidSistema[numThreads];
     
     long double somaPartesInicioAteFim = 0.0L;
-    long double particao;
     
     arg = (ARG_Thread *) malloc(numThreads * sizeof(ARG_Thread));
     
     funcao = func;
-    
-    particao = (fim - inicio)/(long double)numThreads;
+
+    numThreadsOciosas = 0;
+	numIntervalos = 0;
+
+	intervalos = (INTERVALO*) malloc(numThreads * sizeof(INTERVALO));
     
     for (i = 0; i < numThreads; i++)
     {
         arg[i].tid = i;
         arg[i].erro = erro;
         
-        arg[i].inicio = inicio + (particao * i);
-        arg[i].fim = inicio + (particao * (i+1));
-        
         pthread_create(&tidSistema[i], NULL, calculaIntervalo, (void*)&arg[i]);
     }
-    
+
+    pthread_mutex_lock(&mutex);
+	start = 1;
+	produzIntervalo(inicio, fim);
+	pthread_mutex_unlock(&mutex);
+
+	pthread_cond_signal(&cond_pegaIntervalo);
+
     for (i = 0; i < numThreads; i++) 
     {
         pthread_join(tidSistema[i], NULL);
@@ -158,7 +219,7 @@ int main (int argc, char *argv[])
     int funcao = 0;
     
     pthread_mutex_init(&mutex, NULL);
-    pthread_cond_init (&cond_pegaNovoIntervalo , NULL);
+    pthread_cond_init (&cond_pegaIntervalo , NULL);
     
     if (argc == 2 && argv[1][0] == '-' && argv[1][1] == 'h')
     {
@@ -186,7 +247,6 @@ int main (int argc, char *argv[])
     
     funcao = atoi(argv[4]);
     numThreads = atoi(argv[5]);
-    numThreadsOciosas = numThreads;
     
     GET_TIME(tempo_inicio);
 
@@ -281,10 +341,10 @@ void ajuda(char *prog)
 void listarFuncoes()
 {
     puts("Valores válidos para funcao:");
-    puts("-- f(x) = 1 + x \t\t\t-> 1");
-    puts("-- f(x) = sqrt(1 + x^2) \t\t-> 2");
-    puts("-- f(x) = sqrt(1 + x^4) \t\t-> 3");
-    puts("-- f(x) = sen(x^2) \t\t\t-> 4");
+    puts("-- f(x) = 1 + x \t\t\t\t-> 1");
+    puts("-- f(x) = sqrt(1 + x^2) \t\t\t-> 2");
+    puts("-- f(x) = sqrt(1 + x^4) \t\t\t-> 3");
+    puts("-- f(x) = sen(x^2) \t\t\t\t-> 4");
     puts("-- f(x) = cos(e^(-x)) * (0.005 * x^3 + 1)\t-> 5");
 }
 
@@ -293,4 +353,3 @@ long double absoluto(long double valor)
     if (valor < 0.0L) return -valor;
     return valor;
 }
-
